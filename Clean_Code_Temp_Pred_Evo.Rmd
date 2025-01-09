@@ -73,7 +73,7 @@ Here we calculate the z-score of each chlamy's size and remove the one's have z-
 
 # Set factors classes and levels, log FSC-H/-A and SSC-H/-A
 
-c0_2 <-bind_rows(c_d0,c0) %>%filter(!Jar %in% c(25,91)) %>% mutate(Day=as.numeric(Day),Day_f=as.factor(Day), Temp=as.numeric(Temp), Temp_f=as.factor(Temp),Jar=as.numeric(Jar),Strain = factor(Strain),Trt=factor(Trt,levels=c("Control","Tetra","Glauc","P.cau","TetraP.cau","GlaucP.cau")),PredComp = factor(PredComp,levels=c("Control","No","Yes")), Rep = as.character(Rep),Strain_day=paste(Strain,Day,sep="_"), Temp_Day=paste(Temp,Day,sep="_")) %>% mutate(lgFSC_H=log(FSC_H))
+c0_2 <-bind_rows(c_d0,c0) %>%filter(!Jar %in% c(25,91)) %>% mutate(Day=as.numeric(Day),Day_f=as.factor(Day), Temp=as.numeric(Temp), Temp_f=as.factor(Temp),Jar=as.numeric(Jar),Strain = factor(Strain),Trt=factor(Trt,levels=c("Control","Tetra","Glauc","P.cau","TetraP.cau","GlaucP.cau")),PredComp = factor(PredComp,levels=c("Control","No","Yes")), Rep = as.character(Rep),Strain_day=paste(Strain,Day,sep="_"), Temp_Day=paste(Temp,Day,sep="_")) %>% mutate(lgFSC_H=log(FSC_H),lgFSC_A=log(FSC_A))
 
 df <- c0_2 %>% group_by(Day,Strain,Temp,Trt) %>% dplyr::mutate( mlgFSC_H = mean(lgFSC_H), sdlgFSC_H = sd(lgFSC_H), z_lgFSC_H = (lgFSC_H -mlgFSC_H)/sdlgFSC_H)
 # remove data points with z-score > 2 
@@ -695,15 +695,7 @@ summary(lmm_vs_av);Anova(lmm_vs_av)
 lmm_ws_av <- lmer(mLgFSC_H ~ Temp*Trt*Day+(1|Block), data=ws_sng) 
 summary(lmm_ws_av);Anova(lmm_ws_av)
 ```
-
 ## Table 5
-
-```{r}
-vf_dltT.s <- lmer(dlt_Freq_T ~ Temp*Trt*Day+(1|Block), data=vdltf_sng) # everything significant!
-summary(vf_dltT.s);Anova(vf_dltT.s)
-```
-
-## Table 6
 
 ```{r}
 require(MASS)
@@ -715,6 +707,14 @@ c.full.max<-lm(lnDens~Temp*Trt*Strain, data =c_max)
 c_K.step <- stepAIC(c.full.max, direction = "both", trace = FALSE)
 summary(c_K.step)
 ```
+
+## Table 6
+
+```{r}
+vf_dltT.s <- lmer(dlt_Freq_T ~ Temp*Trt*Day+(1|Block), data=vdltf_sng) # everything significant!
+summary(vf_dltT.s);Anova(vf_dltT.s)
+```
+
 
 ## Table 7
 
