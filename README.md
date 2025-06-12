@@ -5,7 +5,7 @@ Global warming is reshaping food webs globally. Rapid evolution has been propose
 
 This repository has the following files:
 
-Density data for protists studied: Protist_density.csv
-Chlamydomonas reinhardtii data from flowcytometry: Chlamy_data_1.csv, Chlamy_data_2.csv, Chlamy_data_3.csv, Chlamy_day0_data_submission.csv
-R Code that reproduces all analyses presented in the main text and Appendix: Clean_Code_Temp_Pred_Evo.R
-Supplementary materials on the swimming ability of C. reinhardtii WT and vfl1-1 mutant: WT_10x_Appendix_V.mov, vfl1-1_10x_Appendix_V.mov
+- Density data for protists studied: Protist_density.csv
+- Chlamydomonas reinhardtii data from flowcytometry: Chlamy_data_1.csv, Chlamy_data_2.csv, Chlamy_data_3.csv, Chlamy_day0_data_submission.csv
+- R Code that reproduces all analyses presented in the main text and Appendix: Clean_Code_Temp_Pred_Evo.R
+- Supplementary materials on the swimming ability of C. reinhardtii WT and vfl1-1 mutant: WT_10x_Appendix_V.mov, vfl1-1_10x_Appendix_V.mov
