@@ -7,16 +7,16 @@ This repository has the following files:
 
 - Density data for protists studied: **Protist_density.csv**
     Flow cytometry measurements for Chlamydomonas reinhardtii collected on experimental days 5, 10, and 15. Each row represents a single-cell measurement. 881,857 observations × 11 variables.
-        `FSC_H` — Forward scatter height (numeric, continuous); proxy for cell/clump size.
-        FSC_A — Forward scatter area (numeric, continuous); used with FSC_H to detect multicellular clumping.
-        Day — Experimental day of sampling (integer; 5, 10, 15).
-        Block — Experimental block assigned as a random effect in all mixed models (character; A, B).
-        Jar — Individual replicate jar ID (integer; 1–96).
-        Rep — Replicate number within treatment (integer; 1–6).
-        Temp — Temperature treatment in °C (integer; 19, 22, 25).
-        Trt — Predator treatment, including single-predator (Tetrahymena, Glaucoma, P. caudatum) and competition pairs (character; Control, Tetra, Glauc, P.cau, TetraP.cau, GlaucP.cau).
-        PredComp — Whether a second predator competitor is present in the jar (character; No, Yes).
-        Strain — C. reinhardtii strain identity, either the flagella-deficient mutant or the fluorescent wild type (character; VFL1-1, WT-mNG).
+       - `FSC_H` — Forward scatter height (numeric, continuous); proxy for cell/clump size.
+       - `FSC_A` — Forward scatter area (numeric, continuous); used with FSC_H to detect multicellular clumping.
+       - `Day` — Experimental day of sampling (integer; 5, 10, 15).
+       - `Block` — Experimental block assigned as a random effect in all mixed models (character; A, B).
+       - `Jar` — Individual replicate jar ID (integer; 1–96).
+       - `Rep` — Replicate number within treatment (integer; 1–6).
+       - `Temp` — Temperature treatment in °C (integer; 19, 22, 25).
+       - `Trt` — Predator treatment, including single-predator (Tetrahymena, Glaucoma, P. caudatum) and competition pairs (character; Control, Tetra, Glauc, P.cau, TetraP.cau, GlaucP.cau).
+       - `PredComp` — Whether a second predator competitor is present in the jar (character; No, Yes).
+       - `Strain` — C. reinhardtii strain identity, either the flagella-deficient mutant or the fluorescent wild type (character; VFL1-1, WT-mNG).
 - Chlamydomonas reinhardtii data from flowcytometry: Chlamy_data_1.csv, Chlamy_data_2.csv, Chlamy_data_3.csv, Chlamy_day0_data_submission.csv
 - R Code that reproduces all analyses presented in the main text and Appendix: Clean_Code_Temp_Pred_Evo.R
 - Supplementary materials on the swimming ability of C. reinhardtii WT and vfl1-1 mutant: WT_10x_Appendix_V.mov, vfl1-1_10x_Appendix_V.mov
