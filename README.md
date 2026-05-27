@@ -31,5 +31,5 @@ This repository has the following files:
   
 - R Code that reproduces all analyses presented in the main text and Appendix: Clean_code_Temp_Pred_Evo.qmd
 - Rendered Quarto file in html format: Clean_code_Temp_Pred_Evo.html
-- Mathematical model output for Figure 2a–b: **model_Control.csv**, **model_Glauc.csv**, **model_Pcaud.csv**, **model_Pcaud.csv**
+- Mathematical model output for Figure 2a–b: **model_Control.csv**, **model_Glauc.csv**, **model_Tetra.csv**, **model_Pcaud.csv**
 - Supplementary materials on the swimming ability of C. reinhardtii WT and vfl1-1 mutant: **WT_10x_Appendix_V.mov**, **vfl1-1_10x_Appendix_V.mov**
