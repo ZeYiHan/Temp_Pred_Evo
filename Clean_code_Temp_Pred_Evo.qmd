@@ -1,0 +1,1004 @@
+---
+title: "Main Text Figures and Supplemental Materials for *Temperature alone is not enough: food-web context determines evolutionary responses to warming*"
+author: "Ze-Yi Han"
+date: "2026-5-20"
+format:
+  html:
+    theme: cosmo
+    highlight-style: github
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    toc-title: "Contents"
+    code-fold: true
+    code-tools: true
+    code-overflow: wrap
+    fig-align: center
+    fig-cap-location: bottom
+    number-sections: true
+    smooth-scroll: true
+    self-contained: true
+    css: styles.css
+    grid:
+      sidebar-width: 260px
+      body-width: 900px
+execute:
+  eval: true
+  cache: true
+  warning: false
+  message: false
+---
+
+```{=html}
+<style>
+/* Scientific journal-style typography */
+body {
+  font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  font-size: 15px;
+  color: #1a1a2e;
+  line-height: 1.7;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  color: #1b3a5c;
+  letter-spacing: 0.01em;
+}
+
+h1 { border-bottom: 2px solid #2a6496; padding-bottom: 6px; }
+h2 { border-bottom: 1px solid #aac5de; padding-bottom: 4px; margin-top: 2em; }
+
+a, a:hover {
+  color: #2a6496;
+}
+
+pre {
+  font-size: 12px;
+  color: #2e4057;
+  background-color: #f6f9fc;
+  border-left: 3px solid #2a6496;
+  border-radius: 3px;
+}
+
+/* Annotation callout styling */
+.annotation {
+  background-color: #eaf4fb;
+  border-left: 4px solid #2a6496;
+  padding: 10px 14px;
+  margin: 10px 0 16px 0;
+  border-radius: 0 4px 4px 0;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  font-size: 13.5px;
+  color: #1b3a5c;
+}
+
+.annotation strong {
+  color: #1b3a5c;
+}
+
+/* Figure caption style */
+.figure-caption {
+  font-size: 12.5px;
+  color: #555;
+  font-style: italic;
+}
+</style>
+```
+
+------------------------------------------------------------------------
+
+::: annotation
+**Overview:** This document presents all main text figures and supplemental analyses for Han et al. The paper examines how temperature and predator community composition jointly drive genotypic change in the prey alga *Chlamydomonas reinhardtii*, specifically tracking the frequency dynamics of the flagella-deficient mutant *vfl1-1* relative to wild type (WT). Analyses proceed from mathematical models and experimental ecological/evolutionary dynamics (Figs. 2–4) through supplemental demographic, phenotypic, and statistical summaries (Appendices II–IV).
+:::
+
+```{r setup, include=FALSE}
+### Loadings----
+# Global chunk options: evaluate all code, use caching for speed,
+knitr::opts_chunk$set(eval = TRUE, cache = TRUE, warning=FALSE, message=FALSE, fig.align = "center")
+# load packages
+pacman::p_load(doBy,lme4, readr,ggpubr,ggiraph,MuMIn,car,ggplot2, data.table, nlme,tidyverse,moments, here)
+require(dplyr)
+```
+
+# Data Read-In
+
+::: annotation
+**Data sources:**
+
+-   **`c0`** — Flow cytometry data for *C. reinhardtii* across all experimental days (days 5, 10, 15). Each row is a single-cell measurement. The complete dataset is divided into 3 csv files for uploading and we merge them before analysis.
+-   **`c_d0`** — Day 0 (initial) flow cytometry data for *C. reinhardtii*, kept separate and merged later with `c0`.
+-   **`pd`** — Daily population density measurements for all three protist predators (*Tetrahymena pyriformis*, *Glaucoma* sp., *Paramecium caudatum*).
+:::
+
+```{r}
+### data read in
+df1 <- fread(here( "Chlamy_data_1.csv"))
+df2 <- fread(here( "Chlamy_data_2.csv"))
+df3 <- fread(here( "Chlamy_data_3.csv"))
+c0 <- bind_rows(df1, df2, df3)
+c_d0 <- fread("Chlamy_day0_data.csv")%>% dplyr::select(-V1)
+pd <- fread("Protist_density.csv")
+```
+
+Color Palettes and Global Plot Theme
+
+```{r}
+strain_col <- c( "#f4ca76","#add0af")  
+strain_name <- c("VFL1-1", "WT")
+
+temp_col <- c("#79bdf9","#fedb8a","#f3ac7f")
+temp_col2 <- c("#6aa7db","#e7b74a","#e09466")
+
+temp_name <- c(expression(paste("19 ",degree,"C")),expression(paste("22 ",degree,"C")), expression(paste("25 ",degree,"C")))
+
+
+fig.theme <- fig.theme <- theme_bw() +
+  theme(
+    panel.border       = element_rect(colour = NA, fill = NA),  # fix: rect not blank
+    panel.grid.major   = element_blank(),
+    panel.grid.minor   = element_blank(),
+    axis.line          = element_line(colour = "black"),
+    strip.background   = element_rect(colour = "white", fill = "#f0f0f0"),
+    plot.title         = element_text(color = "black", size = 14,
+                                      face = "bold", hjust = 0.5),
+    axis.ticks.length  = unit(-0.15, "cm"),
+    axis.text.x        = element_text(margin = unit(c(0.5, 0.5, 0.5, 0.5), "cm")),
+    axis.text.y        = element_text(margin = unit(c(0.5, 0.5, 0.5, 0.5), "cm"))
+  )
+```
+
+# Data Cleaning and Preprocessing
+
+::: annotation
+**Exclusion of crashed replicates:** Two jars (25 and 91) had *Chlamydomonas* populations crash from the start of the experiment (Replicate 1 of the *Tetrahymena* + *P. caudatum* treatment at 19°C and 22°C). These are removed from all subsequent analyses as they provide no usable information about prey ecology or evolution. `NA` is assigned to these jars.
+
+**Z-score filtering of cell size data:** To work with a robust estimate of phenotypic distributions, individual cell measurements with \|z-score\| \> 2 on log-transformed forward scatter height (lgFSC_H) are removed. This retains approximately 95% of observations, removing extreme outliers that likely reflect measurement artifacts rather than true biological variation. The z-score is calculated within each Day × Strain × Temperature × Treatment group to preserve within-group variation.
+
+**Variable transformations:** - `Day`, `Temp`, `Jar` → numeric - `Day_f`, `Temp_f` → factor (for discrete axis/color mapping) - `Strain`, `Trt`, `PredComp` → factor with explicit levels to control plot ordering - `lgFSC_H = log(FSC_H)`, `lgFSC_A = log(FSC_A)` — log-transforms of flow cytometry forward scatter height and area, used as proxies for cell/clump size and to detect multicellular clumping (Appendix II Fig. 4)
+:::
+
+```{r results='hide'}
+
+# Set factors classes and levels, log FSC-H/-A and SSC-H/-A
+
+c0_2 <-bind_rows(c_d0,c0) %>%filter(!Jar %in% c(25,91)) %>% mutate(Day=as.numeric(Day),Day_f=as.factor(Day), Temp=as.numeric(Temp), Temp_f=as.factor(Temp),Jar=as.numeric(Jar),Strain = factor(Strain),Trt=factor(Trt,levels=c("Control","Tetra","Glauc","P.cau","TetraP.cau","GlaucP.cau")),PredComp = factor(PredComp,levels=c("Control","No","Yes")), Rep = as.character(Rep),Strain_day=paste(Strain,Day,sep="_"), Temp_Day=paste(Temp,Day,sep="_")) %>% mutate(lgFSC_H=log(FSC_H),lgFSC_A=log(FSC_A))
+
+df <- c0_2 %>% group_by(Day,Strain,Temp,Trt) %>% dplyr::mutate( mlgFSC_H = mean(lgFSC_H), sdlgFSC_H = sd(lgFSC_H), z_lgFSC_H = (lgFSC_H -mlgFSC_H)/sdlgFSC_H)
+# remove data points with z-score > 2 
+c0_trim_fscH <- df %>%filter(z_lgFSC_H > -2 & z_lgFSC_H<2) 
+length(c0_trim_fscH$FSC_H)/length(df$FSC_H)
+```
+
+# Density and Frequency Calculations
+
+::: annotation
+**Converting counts to density:** Flow cytometry samples 30 µl of culture. Cell counts are converted to individuals per ml by multiplying by 1000/30. `lnDens = log(Dens + 1)` is the natural-log-transformed density (+1 to handle zeros), used in LMM analyses.
+
+**Day 0 standardization:** Day 0 counts are not from flow cytometry measurements but from known inoculation densities: 4000 cells × 0.03 (fraction of 30 µl from 1 ml) = 120 cell-equivalents per strain per jar (i.e., 2000 total per strain per ml). This standardizes the initial conditions across replicates.
+
+**Strain-specific frequency calculation:** The relative frequency of each strain (*vfl1-1* and WT) is calculated as its count divided by the total count per jar per day. This **relative frequency of *vfl1-1*** is the primary response variable for measuring prey evolution throughout the paper (see Methods: *Data analysis*).
+:::
+
+```{r}
+# Calculate total count for each jar
+cden <- c0_trim_fscH %>% group_by(Day,Day_f,Jar,Temp,Temp_f,Trt,Rep,PredComp,Temp_Day,Block) %>% dplyr::summarise(Count_tr=length(FSC_H)) %>%
+  mutate(Count_tr= ifelse(Day == 0, 4000*0.03,Count_tr), 
+         Dens=Count_tr*1000/30, lnDens = log(Dens+1))
+
+# summary by strain in each replicate
+cdenSt0 <- c0_trim_fscH %>% group_by(Day,Day_f,Jar,Temp,Temp_f,Trt,Rep,Strain,PredComp,Strain_day,Temp_Day,Block) %>% dplyr::summarise(Count=length(FSC_H)) %>% 
+  mutate(Count= ifelse(Day == 0, 2000*0.03,Count),
+         Dens=Count*1000/30,lnDens = log(Dens+1))
+```
+
+::: annotation
+**Genotypic frequency calculation:** *vfl1-1* and WT frequencies are calculated separately and then joined to verify they sum to 1 at each time point. The `left_join` with `cden` brings in the total count per jar to serve as the denominator. Frequency is bounded \[0, 1\], which motivates the use of beta regression for hypothesis testing (Appendix IV Tables 2 and 9).
+:::
+
+```{r results="hide"}
+# Frequency of vfl1-1
+vfl_sum <- filter(cdenSt0,Strain == "VFL1-1") %>% left_join(dplyr::select(cden,Day:Count_tr)) %>% mutate(Freq = Count/Count_tr)
+  
+# Frequency of WT-mNG
+WT_sum <- cdenSt0 %>%filter(Strain == "WT-mNG") %>% left_join(dplyr::select(cden,Day:Count_tr)) %>% mutate(Freq = Count/Count_tr)
+
+# check Frequency add up to 1
+vfl_sum$Freq+WT_sum$Freq
+```
+
+::: annotation
+**Combining strains and computing treatment means:** The per-replicate strain data are merged into a single data frame, then summarized across replicates within each treatment-temperature-day combination. Treatment-level means and SDs are used for visualization. Sub-data-frames are created for downstream figure and stats code: `ncp` (no-competition treatments only) is used for main text figures.
+:::
+
+```{r results="hide"}
+cdenSt <- rbind(vfl_sum,WT_sum) 
+```
+
+```{r results="hide"}
+# mean density,count and frequency of each treatment (across replication)
+cdenStm <-  cdenSt %>% group_by(Day,Day_f,Temp,Temp_f,PredComp,Trt,Strain,Strain_day) %>%
+summarise(mCount=mean(Count,na.rm=TRUE),sdCount=sd(Count,na.rm=TRUE),mlnDens=mean(lnDens,na.rm=TRUE),mDens = mean(Dens,na.rm=TRUE),sdDens=sd(Dens,na.rm=TRUE),mFreq=mean(Freq,na.rm=TRUE),sdFreq=sd(Freq,na.rm=TRUE))
+# strain mean within treatment
+vfl_m <- cdenStm %>% dplyr::filter(Strain == "VFL1-1")
+WT_m <- cdenStm %>% dplyr::filter(Strain == "WT-mNG")
+
+# dataframe with No Competition
+ncp<- cdenSt %>% dplyr::filter(!PredComp == "Yes") %>% mutate(Strain = factor(Strain, levels=c("WT-mNG","VFL1-1")))
+```
+
+------------------------------------------------------------------------
+
+# Main Text Figures
+
+## Fig 2 — Mathematical Model Predictions and Experimental Dynamics
+
+```{r}
+ctrl_mp <- read.csv(here("model_Control.csv"),header = FALSE)  %>% mutate(Trt="Control") 
+tetra_mp <- read.csv(here("model_Tetra.csv"),header = FALSE)%>% mutate(Trt="Tetra")
+glauc_mp <- read.csv(here("model_Glauc.csv"),header = FALSE) %>% mutate(Trt="Glauc")
+pcaud_mp <- read.csv(here("model_Pcaud.csv"),header = FALSE) %>% mutate(Trt="P.cau")
+
+cName <- c("t","WT-mNG","VFL1-1","Predator","WT-freq","VFL-freq","Trt")
+colnames(ctrl_mp) <- cName
+colnames(tetra_mp) <- cName
+colnames(glauc_mp) <- cName
+colnames(pcaud_mp) <- cName
+
+modpred <- rbind(ctrl_mp,tetra_mp,glauc_mp,pcaud_mp)
+modpred_dens <- modpred %>% dplyr::select(-c(Predator, `WT-freq`,`VFL-freq`)) %>% pivot_longer('WT-mNG':'VFL1-1',names_to = "Strain", values_to = "Dens")
+modpred_freq <- modpred %>% dplyr::select(-c(Predator, `WT-mNG`,`VFL1-1`)) %>% pivot_longer('WT-freq':'VFL-freq',names_to = "Strain", values_to = "Freq") %>% mutate(Strain=case_when(Strain=="WT-freq" ~ "WT-mNG",Strain=="VFL-freq"~"VFL1-1"))
+
+modpred2 <- full_join(modpred_dens,modpred_freq) %>% mutate(Strain=factor(Strain, levels=c("WT-mNG","VFL1-1")),Trt=factor(Trt, levels=c("Control", "Tetra","Glauc","P.cau")))
+```
+
+::: annotation
+**Fig 2a — Model-predicted strain densities**
+:::
+
+```{r fig.width = 8.5, fig.height = 2.2}
+# model prediction for Fig 2
+fig2_a <- ggplot(data=modpred2,aes(x=t, y=Dens, group=Strain,fill=Strain,color=Strain)) + 
+  labs(x="",y="Density")+
+    scale_color_manual( values= c("#add0af","#f4ca76")  )+
+    geom_point(size = 1, alpha =0.5)+
+    geom_line()+
+    scale_x_continuous(breaks=c( 0,5,10,15),limits = c(0, 15))+
+    facet_wrap(~Trt, nrow = 1)+
+  fig.theme
+fig2_a
+```
+
+::: annotation
+**Fig 2b — Model-predicted strain frequencies**
+:::
+
+```{r fig.width = 8.5, fig.height = 2.2}
+fig2_b <- ggplot(data=modpred2,aes(x=t, y=Freq, group=Strain,fill=Strain,color=Strain)) + 
+   labs(x = "Time",y="Genetic Frequency", size = 2)+
+   geom_bar(position="stack", stat="identity")+
+    facet_wrap(~Trt, nrow = 1)+
+    xlab("Day")+
+    scale_fill_manual(values=c("#add0af","#f4ca76"))+
+    scale_color_manual( values=c("#add0af","#f4ca76"))+
+    fig.theme
+fig2_b
+```
+
+::: annotation
+**Fig 2c — Experimental strain densities (no-competition treatments)**
+:::
+
+```{r fig.width = 8.5, fig.height = 2.2}
+fig2_c <- ggplot(data=ncp,aes(x=Day, y=Dens, group=Strain,fill=Strain,color=Strain)) + 
+  labs(x="",y="Density")+
+    scale_color_manual( values= c("#add0af","#f4ca76")  )+
+    geom_point(position=position_jitterdodge(jitter.width = 1.5, dodge.width = 4),size = 1, alpha =0.5)+
+    stat_summary(fun.y = "mean", geom = "line",position = position_dodge(4),size=0.6)+
+     stat_summary(fun.y = "mean", geom = "point",position = position_dodge(4),size = 1)+
+    stat_summary(fun.data = mean_se, geom = "errorbar",position = position_dodge(4),width=3, size= 0.6 )+
+    facet_wrap(~Trt, nrow = 1)+
+  fig.theme
+fig2_c
+```
+
+::: annotation
+**Fig 2d — Experimental strain frequencies (no-competition treatments)**
+:::
+
+```{r fig.width = 8.5, fig.height = 2.2}
+fig2_d <- ggplot(data=ncp,aes(x=Day, y=Freq, group=Strain,fill=Strain,color=Strain)) + 
+   labs(x = "Day",y="Genetic Frequency", size = 2)+
+    stat_summary(fun.y = "mean", geom = "bar",position="stack")+
+    facet_wrap(~Trt, nrow = 1)+
+    xlab("Day")+
+    scale_fill_manual(values=c("#add0af","#f4ca76"))+
+    scale_color_manual( values=c("#add0af","#f4ca76"))+
+    fig.theme
+fig2_d
+```
+
+::: annotation
+**Fig 2e — WT cell size distributions (no-competition treatments)**
+:::
+
+```{r fig.width=8, fig.height=2.5}
+fscH_ncp <- c0_trim_fscH %>% filter(!Trt %in% c("TetraP.cau", "GlaucP.cau"))
+fig2_e <- ggplot(fscH_ncp,aes(x=Day, y=lgFSC_H, group=Strain_day,fill = Strain,color=Strain)) + 
+    geom_violin(width = 5) +
+    stat_summary(fun.y = "mean", geom = "point",position = position_dodge(5), size=1.5, stroke = 1,shape = 1, color="#9c97a8")+
+    stat_summary(fun.y = "mean", geom = "point",position = position_dodge(5), size=1.3, shape = 16, color="white")+
+    facet_grid(~Trt) +
+    labs(y = "log Size")+
+    scale_fill_manual(name = "Strain",values=strain_col) + 
+    scale_color_manual(name = "Strain",values=strain_col) +
+    fig.theme
+fig2_e
+```
+
+## Fig 3 — Temperature Effects on Prey Evolution and the *P. caudatum* System
+
+::: annotation
+**Delta *vfl1-1* frequency calculation (Δ frequency):** As described in Methods (*Data analysis*), Δ*vfl1-1* frequency is calculated by subtracting the mean *vfl1-1* frequency at 19°C from each replicate at 22°C and 25°C within each treatment and day. This isolates the temperature-specific deviation in prey evolution from the 19°C baseline, making cross-temperature comparisons directly interpretable (Appendix IV Table 6).
+:::
+
+```{r}
+# Single predators treatment data frame for each prey strain
+vfl_sng <- vfl_sum %>% filter(PredComp != "Yes", Day!=0)
+wt_sng <- WT_sum %>% filter(PredComp != "Yes", Day!=0)
+# Competition treatments data frame for each prey strain
+vfl_cmp <- vfl_sum %>% filter(!Trt %in% c("Control","P.cau"), Day!=0) %>% ungroup %>% mutate(FocalSp = ifelse(Trt %in%c("Tetra","TetraP.cau"), "Tetra","Glauc" ))
+wt_cmp <- WT_sum %>% filter(!Trt %in% c("Control","P.cau"), Day!=0) %>% ungroup %>% mutate(FocalSp = ifelse(Trt %in%c("Tetra","TetraP.cau"), "Tetra","Glauc" ))
+```
+
+```{r}
+v19_mean_sng <- vfl_sng %>% filter(Temp == 19 ) %>%  group_by(Temp,Trt,Day) %>% summarize(m19Freq=mean(Freq)) %>% ungroup %>% dplyr::select(-Temp)
+vdltf_sng <- vfl_sng %>% filter( !Temp == 19 ) %>% left_join(.,v19_mean_sng) %>% mutate(dlt_Freq_T=Freq-m19Freq)
+```
+
+::: annotation
+**Fig 3a — Δ*vfl1-1* frequency across single-predator treatments**
+:::
+
+```{r fig.width=8.5,fig.height=3}
+fig_3a <- ggplot() + 
+  geom_hline(yintercept = 0,color= temp_col[1], size = 0.6)+ 
+   stat_summary(vdltf_sng, mapping=aes(x=Day, y=dlt_Freq_T, color = Temp_f),fun.y = "mean", geom = "point",position=position_dodge(4), stat="identity",size = 2)+
+   stat_summary(vdltf_sng, mapping=aes(x=Day, y=dlt_Freq_T, color = Temp_f),fun.data = mean_se, geom = "errorbar",position = position_dodge(4),width=2.5 , size= 0.45) +
+    facet_wrap(~Trt, nrow=1)+
+    labs(x = "Day", y = bquote("Delta" ~ italic("vfl1-1") ~ "Frequency"))+
+   scale_fill_manual(name = "Temperature",values=temp_col[2:3])+
+   scale_color_manual(name = "Temperature",values=temp_col[2:3])+ 
+   fig.theme
+fig_3a
+```
+
+::: annotation
+**Fig 3b — *P. caudatum* density and *vfl1-1* frequency (dual-axis)**
+:::
+
+```{r}
+# add day 0 data for all protists
+tetra_d0<- pd %>% filter(Day=="5" & Species=="Tetra") %>% mutate(Day=0,Day_f="0", Dens=5)
+glauc_d0<- pd %>% filter(Day=="5" & Species=="Glauc") %>% mutate(Day=0,Day_f="0", Dens=5) 
+p.cau_d0<- pd %>% filter(Day=="5" & Species=="P.cau") %>% mutate(Day=0,Day_f="0", Dens=0.5) 
+pd_all <- rbind(tetra_d0,glauc_d0,p.cau_d0,pd)
+```
+
+```{r}
+# protists density
+pd2 <- pd_all %>% na.omit%>% filter(!Jar %in% c(25,91)) %>% mutate(Day=as.numeric(Day),Day_f=as.factor(Day_f), Temp=as.numeric(Temp), Temp_f=as.factor(Temp_f),Trt=factor(Trt,levels=c("Tetra","Glauc","P.cau","TetraP.cau","GlaucP.cau")),Species=factor(Species,levels=c("Tetra","Glauc","P.cau")), Rep = as.character(Rep), Sp_temp = paste(Species,Temp,sep="_"), SpTempTD = paste(Species,Temp,Day,Trt,sep="_"), lnDens = log(Dens+1))  
+
+# predator density in single-predator treatments
+pd_sng <- pd2 %>% filter(Trt%in%c("Tetra","Glauc","P.cau") & !Day==0) %>% ungroup %>% dplyr::select(Jar,Day,Temp,Species,Dens,lnDens) %>% mutate(Temp_f=as.factor(Temp))
+colnames(pd_sng)[4:6] <- c("PtSpecies","PtDens","PtlnDens")
+
+PtVfl_sng <- left_join(vfl_sng,pd_sng)
+PtVfl_pcaud <- PtVfl_sng %>% filter(Trt=="P.cau")
+shape_pcaud_temp <- PtVfl_pcaud  %>% ungroup %>% mutate(temp_shape = case_when(Temp=="19" ~ 1, Temp=="22"~2, Temp=="25"~0))  %>% pull(temp_shape)
+```
+
+```{r fig.width = 5, fig.height = 4.2}
+fig_3b <- ggplot(PtVfl_pcaud) + 
+#vfl1-1 freq
+   stat_summary(mapping=aes(x=Day, y=Freq*8.5, fill=Temp_f),fun.y = "mean", geom = "bar",position=position_dodge(4),alpha = 0.5, width = 4)+
+    scale_fill_manual(name = "Temperature",labels = temp_name,values=temp_col) +
+    scale_color_manual(name = "Temperature",labels = temp_name,values=temp_col2) +
+    scale_shape_manual(name ="Temperature", labels = temp_name,values=c(16,17,15))+
+# Protist
+  geom_point(aes(x=Day, y=PtlnDens,group =Temp_f,fill=Temp_f,color=Temp_f,shape=Temp_f),position=position_jitterdodge(jitter.width = 1.5, dodge.width = 4),size = 1.5 ,shape=shape_pcaud_temp, alpha=0.7)+
+  stat_summary(aes(x=Day, y=PtlnDens,group=Temp_f,color=Temp_f), fun.y = "mean", geom = "line",position = position_dodge(4),size=0.6)+
+   stat_summary(aes(x=Day, y=PtlnDens,group=Temp_f,color=Temp_f),fun.data = mean_se, geom = "errorbar",position = position_dodge(4), size= 0.45,width = 3) +
+   stat_summary(aes(x=Day, y=PtlnDens,group=Temp_f,color=Temp_f, shape = Temp_f),fun.y = "mean", geom = "point",position = position_dodge(4),size = 2)+
+  scale_y_continuous(name = "Protists Ln(Density)", limits = c(0,6.1), sec.axis = sec_axis( trans=~./8.5, name=bquote(italic("vfl1-1") ~ "Frequency"))) +
+  fig.theme
+fig_3b
+```
+
+::: annotation
+**Fig 3c — WT cell size plasticity in *P. caudatum* treatment**
+:::
+
+```{r  fig.width = 5, fig.height = 2.5}
+ws_pcaud <- c0_trim_fscH %>% filter(Strain == "WT-mNG", Trt=="P.cau", Day!=0)
+
+fig_3c <- ggplot(data=ws_pcaud,aes(x=Day, y=lgFSC_H, group=Temp_Day,fill=Temp_f,color=Temp_f)) + 
+   geom_violin()+ 
+    scale_color_manual(name = "Temperature",labels = temp_name,values=temp_col) + 
+    scale_fill_manual(name = "Temperature",labels = temp_name,values=temp_col)+
+    ylab("WT Size")+
+  stat_summary(fun.y = "mean", geom = "point",position = position_dodge(4.5), size=1.5, stroke = 1,shape = 1, color="#9c97a8")+
+  stat_summary(fun.y = "mean", geom = "point",position = position_dodge(4.5), size=1.3, shape = 16, color="white")+
+    facet_grid(~Trt) +
+  fig.theme
+fig_3c
+```
+
+## Fig 4 — Predator Competition Effects on Prey Evolution
+
+::: annotation
+**Fig 4a — Δ*vfl1-1* frequency relative to control**
+:::
+
+```{r}
+# calculate delta vfl1-1 using control at each temperature as baseline
+ctrl_mean <- vfl_sum %>%filter(Trt=="Control" & !Day==0 ) %>%  group_by(Temp,Day) %>% summarize(mCtrlFreq=mean(Freq)) %>% ungroup
+
+vfl_freq_ctrl_base <- vfl_sum %>%filter( !Trt=="Control" & !Day==0 ) %>% left_join(.,ctrl_mean) %>% mutate(dlt_Freq_ctrl= Freq- mCtrlFreq)
+```
+
+```{r fig.width = 7, fig.height = 6}
+trt_cols <- c("#a3c586", "#7ab8ee", "#f4a982", "#c6a8f0", "#708090", "#8b4452")
+
+legend_labels <- c(
+  "Tetra"      = expression(italic("Tetrahymena")~sp.),
+  "Glauc"      = expression(italic("Glaucoma")~sp.),
+  "P.cau"      = expression(italic("P. caudatum")),
+  "TetraP.cau" = expression(italic("Tetra + P.caud")),
+  "GlaucP.cau" = expression(italic("Glauc + P.caud"))
+)
+  
+fig_4a <- ggplot(vfl_freq_ctrl_base, aes(x = Trt, y = dlt_Freq_ctrl, color = Trt, group = 1)) +
+  geom_rect(aes(xmin = 3.5, xmax = 5.5, ymin = -Inf, ymax = Inf), 
+            fill = "#f7f7f7", color = NA, inherit.aes = FALSE) +
+  geom_hline(yintercept = 0, color = "#a3c586", size = 0.6) +
+  stat_summary(fun = mean, geom = "point", size = 2.0, shape = 21, fill = "white", stroke = 0.8) +
+  stat_summary(fun = mean, geom = "point", size = 1.5) +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.3, size = 0.3) +
+  facet_grid(Temp ~ Day, labeller = labeller(Day = function(x) paste("Day", x), Temp = function(x) paste0( x,"°C"))) +
+  scale_color_manual(name = "Treatment", values = trt_cols[2:6], labels = legend_labels) +
+  scale_fill_manual(name = "Treatment", values = trt_cols[2:6], labels = legend_labels) +
+  scale_x_discrete(expand = expansion(mult = c(0.05, 0.05))) +
+  labs(x = "Treatment", y = bquote("Delta" ~ italic("vfl1-1") ~ "Frequency")) +
+  theme_minimal() +
+  theme(legend.position = "right", legend.title = element_text(face = "bold", color = "black"), legend.text = element_text(size = 9, color = "black"), axis.title = element_text(face = "bold", color = "black"), axis.text = element_text(color = "black"), axis.text.x = element_text(angle = 45, hjust = 1), strip.background = element_rect(fill = "#f2f2f2", color = NA), strip.text = element_text(face = "bold", size = 11, color = "black"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(color = "black"), axis.ticks = element_line(color = "black"))
+fig_4a
+```
+
+::: annotation
+**Fig 4b — Competition treatment predator dynamics and *vfl1-1* frequency**
+:::
+
+```{r fig.width = 6, fig.height = 4}
+pcomp <- pd2 %>%filter(PredComp=="Yes")  %>% orderBy(~ + Trt+Day+Species+Temp,.)
+overlay_bottom_cmp <- vfl_sum %>%filter(Trt%in%c("TetraP.cau", "GlaucP.cau"), !Day==0)
+
+pcomp_pcau <- pcomp %>%filter(Species=="P.cau", !Day ==0) 
+pcomp_tetra_glauc <- pcomp %>%filter(!Species=="P.cau", !Day ==0) 
+sp_shape_tg <- pcomp_tetra_glauc %>% ungroup %>% mutate(temp_shape = case_when(Temp=="19" ~ 1, Temp=="22"~2, Temp=="25"~0))  %>% pull(temp_shape)
+
+sp_shape_p <- pcomp_pcau  %>% ungroup %>% mutate(temp_shape = case_when(Temp=="19" ~ 1, Temp=="22"~2, Temp=="25"~0))  %>% pull(temp_shape)
+
+
+fig_4b <- ggplot() + 
+    #labs(x="Day",y="VFL1-1 Frequency/ Protists log density")+
+     scale_fill_manual(name = "Temperature",labels = temp_name,values=temp_col) +
+  # bars for VFL frequencies
+   stat_summary(overlay_bottom_cmp, mapping=aes(x=Day, y=Freq*8.5, fill=Temp_f),fun.y = "mean", geom = "bar",position=position_dodge(4), stat="identity", alpha = 0.5, width = 4)+
+  # tetra+Glauc
+    scale_color_manual(name = "Temperature",labels = temp_name,values=temp_col2) +
+    scale_shape_manual(name ="Temperature", labels = temp_name,values=c(16,17,15))+
+    scale_linetype_manual(name = "Species",values=c("dotted","solid","dashed"))+
+  geom_point(data=pcomp_tetra_glauc,aes(x=Day, y=lnDens,group=Sp_temp,color=Temp_f,shape=Temp_f),position=position_jitterdodge(jitter.width = 1.5, dodge.width = 4),size = 1 ,alpha=0.7,shape=sp_shape_tg)+
+    stat_summary(data=pcomp_tetra_glauc,aes(x=Day, y=lnDens,group=Sp_temp,color=Temp_f,linetype = Species), fun.y = "mean", geom = "line",position = position_dodge(4),size=0.6)+
+    stat_summary(data=pcomp_tetra_glauc,aes(x=Day, y=lnDens,group=Sp_temp,color=Temp_f),fun.data = mean_se, geom = "errorbar",position = position_dodge(4), size= 0.45, width=3) +
+  stat_summary(data=pcomp_tetra_glauc,aes(x=Day, y=lnDens,group=Sp_temp,color=Temp_f,shape=Temp_f),fun.y = "mean", geom = "point",position = position_dodge(4),size = 1.5)+
+  # P.caud
+  geom_point(data=pcomp_pcau,aes(x=Day, y=lnDens,group=Sp_temp,color=Temp_f),position=position_jitterdodge(jitter.width = 1.5, dodge.width = 4),size = 1 ,alpha=0.7,shape=sp_shape_p)+
+    stat_summary(data=pcomp_pcau,aes(x=Day, y=lnDens,group=Sp_temp,color=Temp_f,linetype = Species), fun.y = "mean", geom = "line",position = position_dodge(4),size=0.6)+
+    stat_summary(data=pcomp_pcau,aes(x=Day, y=lnDens,group=Sp_temp,color=Temp_f),fun.data = mean_se, geom = "errorbar",position = position_dodge(4), size= 0.45, width=3) +
+  stat_summary(data=pcomp_pcau,aes(x=Day, y=lnDens,group=Sp_temp,color=Temp_f,shape=Temp_f),fun.y = "mean", geom = "point",position = position_dodge(4),size = 1.5)+
+    facet_wrap(~Trt,scale = "fixed") +
+    scale_y_continuous(name = "Protist Ln(Density)", limits = c(0,8.5), sec.axis = sec_axis( trans=~./8.5, name=bquote(italic("vfl1-1") ~ "Frequency")))+
+    scale_x_continuous(breaks = c(5,10,15))+
+  fig.theme
+fig_4b
+```
+
+::: annotation
+**Fig 4c — WT size plasticity in competition treatments**
+:::
+
+```{r fig.width = 6, fig.height = 2.5}
+wt_fsc_cmp <- c0_trim_fscH %>%filter(Strain == "WT-mNG", PredComp=="Yes")
+
+fig_4c <- ggplot(data=wt_fsc_cmp,aes(x=Day, y=lgFSC_H, group=Temp_Day,fill=Temp_f,color=Temp_f)) + 
+   geom_violin()+ 
+    scale_color_manual(name = "Temperature",labels = temp_name,values=temp_col) + 
+    scale_fill_manual(name = "Temperature",labels = temp_name,values=temp_col)+
+  stat_summary(fun.y = "mean", geom = "point",position = position_dodge(4.5), size=1.5, stroke = 1,shape = 1, color="#9c97a8")+
+  stat_summary(fun.y = "mean", geom = "point",position = position_dodge(4.5), size=1.3, shape = 16, color="white")+
+    facet_grid(~Trt) +
+  fig.theme
+fig_4c
+```
+
+------------------------------------------------------------------------
+
+# Appendix II — Supplemental Ecological and Phenotypic Figures
+
+## Fig 1 — Full Population Density Trajectories
+
+```{r fig.width=10, fig.height=6}
+Trt.labs <- c("Control", "Tetrahymena", "Glaucoma","Paramecium","Tetra+Param","Glauc+Param")
+names(Trt.labs) <- unique(cdenSt$Trt)
+
+ap.all.eco <- ggplot(data=cdenSt,aes(x=Day, y=Dens,group=Strain,fill=Strain,color=Strain)) + 
+    ylab("C. reinhardtii Density") +
+    scale_color_manual(name = "Strain",values=strain_col)+
+    geom_point(position=position_jitterdodge(jitter.width = 1.5, dodge.width = 4),size = 1, alpha =0.5)+
+    stat_summary(fun.y = "mean", geom = "line",position = position_dodge(4),size=0.6)+
+    stat_summary(fun.y = "mean", geom = "point",position = position_dodge(4),size = 1)+
+    stat_summary(fun.data = mean_se, geom = "errorbar",position = position_dodge(4),width=3, size= 0.6 )+
+    facet_grid(Temp~Trt, labeller = labeller(Trt = Trt.labs)) +
+  fig.theme;ap.all.eco
+```
+
+## Fig 2 — Full Clonal Frequency Trajectories
+
+```{r fig.width=10, fig.height=6}
+ap.all.evo <- ggplot(cdenSt, aes(x=Day, y=Freq, fill=Strain)) + 
+     stat_summary( aes(x=Day, y=Freq, fill=Strain),fun.y = "mean", geom = "bar",position="stack", stat="identity", alpha=0.9)+
+    ylab("Frequency")+
+    facet_grid(Temp~Trt, labeller = labeller(Trt = Trt.labs)) +
+    scale_fill_manual(name = "Strain",values=strain_col)+
+    fig.theme;ap.all.evo
+```
+
+## Fig 3 — Cell Size Distributions
+
+```{r fig.width=10, fig.height=6}
+AP_all_size <- ggplot(c0_trim_fscH,aes(x=Day, y=lgFSC_H, group=Temp_Day)) + 
+  geom_violin(aes(fill = Temp_f,color=Temp_f),trim=TRUE) +
+  stat_summary(fun.y = "mean", geom = "point",position = position_dodge(4.5), size=1, stroke = 1,shape = 1, color="#9c97a8")+
+  stat_summary(fun.y = "mean", geom = "point",position = position_dodge(4.5), size=0.9, shape = 16, color="white")+
+    ylab("Size")+
+    facet_grid(Strain~Trt, labeller = labeller(Trt = Trt.labs)) +
+    ggtitle("C.reinhardtii Size") +
+    scale_fill_manual(name = "Strain",values=temp_col) + 
+    scale_color_manual(name = "Strain",values=temp_col) +
+  fig.theme;AP_all_size
+```
+
+## Fig 4 — FSC-H vs. FSC-A: Clumping Detection
+
+```{r fig.width=18,fig.height=7}
+ap_clumping <- ggplot(c0_trim_fscH,aes(x=lgFSC_H, y=lgFSC_A, group=Temp_Day,color=Strain))+
+  geom_segment(aes(x=13,xend=16,y=12, yend=15),color = "black",size=0.3)+
+  geom_point(size=0.0005, alpha = 0.1)+
+  facet_grid(Day+Strain~Trt+Temp)+
+   scale_color_manual(name="Strains",values= c("#f49834","#add0af"))+
+  theme_bw()+theme(legend.position="right",panel.border = element_blank(), panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), strip.background =element_rect(colour="white", fill="#f0f0f0"),plot.title = element_text(color="black", size=14, face="bold",hjust=0.5),axis.ticks.length=unit(-0.15, "cm"), axis.text.x = element_text(margin=unit(c(0.5,0.5,0.5,0.5), "cm")), axis.text.y = element_text(margin=unit(c(0.5,0.5,0.5,0.5), "cm")),strip.text.x = element_text(size = 14))
+ap_clumping
+```
+
+## Fig 5 — *C. reinhardtii* Growth Rate and Maximum Density
+
+::: annotation
+**Demographic parameter calculations:** Two key demographic parameters are calculated here for *C. reinhardtii* (see Methods: *Data analysis*):
+
+1.  **Initial growth rate, r** = \[ln(N₅) − ln(N₀)\] / 5 — calculated from Day 5 density and the Day 0 inoculation density (2000 ind/ml per strain). This serves as a proxy for maximum growth rate at each temperature. Rows with zero density are filtered out to avoid `log(0)`.
+
+2.  **Maximum density, Nmax** — identified by finding the day with the highest mean ln(density) per treatment × temperature × strain combination, then pulling those individual replicate values from `cdenSt`. This serves as a proxy for carrying capacity (K).
+:::
+
+```{r fig.width=10, fig.height=10}
+# calculate initial population growth rate for each strain of Chlamydomonas
+c_r <- cdenSt %>% filter(Day==5, !Dens==0) %>% ungroup %>% dplyr::select(Day_f, Temp, Temp_f,Trt, Rep,Strain,PredComp, Dens) %>% mutate(D0 = case_when(Strain == "VFL1-1" ~ 2000, Strain== "WT-mNG" ~ 2000), r = log(Dens/D0)/5)
+
+# calculate maximum abundance for each strain of Chlamydomonas
+c_maxMean <- cdenStm %>% group_by(Temp,Strain,Trt,PredComp) %>% arrange(desc(mlnDens)) %>% slice(1) %>% mutate(StrTempTD = paste(Strain,Temp,Day,Trt,sep="_"))
+cdenSt$StrTempTD <- mutate(cdenSt,StrTempTD = paste(Strain,Temp,Day,Trt,sep="_")) %>% pull(StrTempTD)
+c_max <- cdenSt %>% filter(StrTempTD %in% c_maxMean$StrTempTD) 
+
+c_r_shape <- c_r %>% ungroup %>% mutate(point_shape = case_when(Temp == 19 ~ 1,Temp  == 22 ~ 2, Temp == 25~0)) %>% orderBy(~ Trt+Temp,.) %>% pull(point_shape)
+
+c_r_fig<- ggplot(c_r, aes(x=Temp_f, y=r, group = Trt, color = Temp_f,shape = Temp_f))+
+    scale_color_manual(name = "Temperature",values=temp_col) + 
+    scale_shape_manual(name = "Temperature",values=c(16,17,15))+
+  xlab("Temperature")+
+    geom_point(position=position_jitterdodge(jitter.width = 1.5),size = 1, shape = c_r_shape)+
+    stat_summary(fun.y = "mean", geom = "point",size = 2.5,alpha = 0.7)+
+    stat_summary(fun.data = mean_se, geom = "errorbar",width=1,size= 0.45) +
+  facet_grid(Strain ~ Trt,  scales = "fixed",labeller = labeller(Trt = Trt.labs))+
+  fig.theme
+
+
+c_maxMean <- cdenStm %>% group_by(Temp,Strain,Trt,PredComp) %>% arrange(desc(mlnDens)) %>% slice(1) %>% mutate(StrTempTD = paste(Strain,Temp,Day,Trt,sep="_"))
+
+cdenSt$StrTempTD <- mutate(cdenSt,StrTempTD = paste(Strain,Temp,Day,Trt,sep="_")) %>% pull(StrTempTD)
+c_max <- cdenSt %>%filter(StrTempTD %in% c_maxMean$StrTempTD) 
+cmax_point_shape2 <-c_max  %>% ungroup %>% mutate(point_shape = case_when(Temp == 19 ~ 1,Temp  == 22 ~ 2, Temp == 25~0)) %>% orderBy(~ + Strain+ Trt+Day+Block+Temp,.) %>% pull(point_shape)
+
+c_max_fig <- ggplot(c_max , aes(x=Temp_f, y=lnDens, group = Trt, color = Temp_f,shape = Temp_f))+
+    scale_color_manual(name = "Temperature",values=temp_col) + 
+    scale_shape_manual(name = "Temperature",values=c(16,17,15))+
+  ylab("Max Ln Density")+
+  xlab("Temperature")+
+    geom_point(position=position_jitterdodge(jitter.width = 1.5),size = 1, shape = cmax_point_shape2)+
+    #stat_summary(position=position_dodge(2),fun.y = "mean", geom = "line",size=0.6, color ="grey")+
+    stat_summary(fun.y = "mean", geom = "point",size = 2.5,alpha = 0.7)+
+    stat_summary(fun.data = mean_se, geom = "errorbar",width=1,size= 0.45) +
+  facet_grid(Strain~Trt)+
+  theme_bw()+theme(legend.position="bottom",panel.border = element_blank(), panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), strip.background =element_rect(colour="white", fill="#f0f0f0"),plot.title = element_text(color="black", size=14, face="bold",hjust=0.5),axis.ticks.length=unit(-0.15, "cm"), axis.text.x = element_text(margin=unit(c(0.5,0.5,0.5,0.5), "cm")), axis.text.y = element_text(margin=unit(c(0.5,0.5,0.5,0.5), "cm")),strip.text.x = element_text(size = 14))
+
+c_r_maxDens <- ggarrange(c_r_fig, c_max_fig,labels = c("A", "B"),ncol = 1, nrow = 2,common.legend = TRUE, legend = "bottom")
+c_r_maxDens
+```
+
+## Fig 6 — Predator Growth Rate and Maximum Density
+
+::: annotation
+**Appendix II Fig 6 — Predator demographic parameters:** Growth rates (`r`) and maximum ln(density) for each protist predator species across treatments and temperatures. Computed analogously to *C. reinhardtii* (Fig 5) using known inoculation densities as D₀ (Tetra/Glauc = 5 ind/ml, P. cau = 0.5 ind/ml). Maximum density is identified by finding the day with peak mean ln(density) across replicates per species × treatment × temperature. These data feed into the stepwise linear model selection reported in Appendix IV Table 7. Results show that temperature performance (r and Nmax) differs among predator species and changes with temperature, which is key to interpreting EMD results (Appendix III) and the mechanism through which temperature mediates prey evolution.
+:::
+
+```{r fig.width=10, fig.height=8}
+pd_r <- pd2 %>% filter(Day==5, !Dens==0) %>% mutate(D0 = case_when(Species == "Tetra" ~ 5,Species == "Glauc" ~ 5, Species == "P.cau"~0.5), r = log(Dens/D0)/5)  
+
+point_shape <- pd_r %>% ungroup %>% mutate(point_shape = case_when(Temp == 19 ~ 1,Temp  == 22 ~ 2, Temp == 25~0)) %>% orderBy(~ + Species+ Trt+Day+Block+Temp,.) %>% pull(point_shape)
+
+g1 <- ggplot(pd_r, aes(x=Temp_f, y=r, group = Trt, color = Temp_f,shape = Temp_f))+
+    scale_color_manual(name = "Temperature",values=temp_col) + 
+    scale_shape_manual(name = "Temperature",values=c(16,17,15))+
+  xlab("Temperature")+
+    geom_point(position=position_jitterdodge(jitter.width = 1.5),size = 1, shape = point_shape)+
+    stat_summary(fun.y = "mean", geom = "point",size = 2.5,alpha = 0.7)+
+    stat_summary(fun.data = mean_se, geom = "errorbar",width=1,size= 0.45) +
+  facet_wrap(Species~Trt, nrow=1, scales = "fixed",labeller = labeller(Trt = Trt.labs))+
+  fig.theme
+
+pd_sum <- pd2 %>% group_by(Day,Day_f,Block,Temp,Temp_f,Trt,Species,PredComp) %>% dplyr::summarise(mDens=mean(Dens), mlnDens=mean(lnDens))
+pd_maxMean <- pd_sum %>% group_by(Temp,Species,PredComp,Trt) %>% dplyr::summarise(max=max(mlnDens))
+pd_maxdens <- pd_sum[which(pd_sum$mlnDens %in% pd_maxMean$max),] %>% mutate(SpTempTD = paste(Species,Temp,Day,Trt,sep="_"))
+pd_max <- pd2 %>%  filter(SpTempTD %in% pd_maxdens$SpTempTD) 
+point_shape2 <- pd_max %>% ungroup %>% mutate(point_shape = case_when(Temp == 19 ~ 1,Temp  == 22 ~ 2, Temp == 25~0)) %>% orderBy(~ + Species+ Trt+Day+Block+Temp,.) %>% pull(point_shape)
+
+g2 <- ggplot(pd_max, aes(x=Temp_f, y=lnDens, group = Trt, color = Temp_f,shape = Temp_f))+
+    scale_color_manual(name = "Species",values=temp_col) + 
+    scale_shape_manual(name = "Species",values=c(16,17,15))+
+  ylab("Max Log Density")+
+  xlab("Temperature")+
+    geom_point(position=position_jitterdodge(jitter.width = 1.5),size = 1, shape = point_shape2)+
+    stat_summary(fun.y = "mean", geom = "point",size = 2.5,alpha = 0.7)+
+    stat_summary(fun.data = mean_se, geom = "errorbar",width=1,size= 0.45) +
+  facet_wrap(Species~Trt, nrow=1, scales = "fixed",labeller = labeller(Trt = Trt.labs))+
+  fig.theme
+
+g3 <- ggarrange(g1, g2,labels = c("a", "b"),ncol = 1, nrow = 2,common.legend = TRUE, legend = "bottom")
+g3
+```
+
+## Fig 7 — All Species Density (Combined)
+
+```{r fig.width=10, fig.height=6}
+#merging chlamy density with protists density]
+cd2 <- cdenSt %>% rename(Species=Strain)
+dens2 <-  rbind(cd2, pd2[,-c("Sp_temp","SpTempTD")]) %>% mutate(Trt=factor(Trt,levels=c("Control","Tetra","Glauc","P.cau","TetraP.cau","GlaucP.cau")),Species=factor(Species,levels=c("VFL1-1","WT-mNG","Tetra","Glauc","P.cau")))
+
+Ap.eco.allSpecies <- ggplot() + 
+    scale_color_manual(name = "Species",values=c("#f4ca76","#add0af","#a4a4a4", "#7fb1dd", "#edb494"))+
+    geom_point(data=dens2,aes(x=Day, y=lnDens, group=Species,fill=Species,color=Species),position=position_jitterdodge(jitter.width = 1.5, dodge.width = 4),size = 1, alpha=0.5)+
+    stat_summary(data=dens2,aes(x=Day, y=lnDens, group=Species,fill=Species,color=Species),fun.y = "mean", geom = "line",position = position_dodge(4),size=0.6,alpha=0.5)+
+    stat_summary(data=dens2,aes(x=Day, y=lnDens, group=Species,fill=Species,color=Species),fun.y = "mean", geom = "point",position = position_dodge(4),size = 1)+
+    stat_summary(data=dens2,aes(x=Day, y=lnDens,group=Species,fill=Species,color=Species),fun.data = mean_se, geom = "errorbar",position = position_dodge(4),width=3, size= 0.6, alpha=0.5)+
+    facet_grid(Temp~Trt,labeller = labeller(Trt = Trt.labs)) +
+    fig.theme; Ap.eco.allSpecies
+```
+
+------------------------------------------------------------------------
+
+# Appendix III — Earth Mover's Distance
+
+## Fig 1 — EMD of Prey Evolutionary Trajectories
+
+::: annotation
+**Earth Mover's Distance (EMD) analysis (Methods: *Data analysis*):** EMD (`emdist` package, v0.3-3) quantifies the dissimilarity between two frequency distributions over time — here, the *vfl1-1* frequency trajectory (Freq over Day) of different predation treatments. Higher EMD = less similar evolutionary outcomes. EMD is calculated for three pairwise comparisons per competition pair and temperature:
+
+1.  Single predator 1 vs. competition treatment (e.g., Tetra vs. TetraP.cau)
+2.  Single predator 2 vs. competition treatment (e.g., P. cau vs. TetraP.cau)
+3.  Single predator 1 vs. single predator 2 (e.g., Tetra vs. P. cau)
+:::
+
+```{r fig.width=6, fig.height=7}
+# pulling vfl1-1 frequence over time for each temperature and predator treatment for calculating EMD
+for(i in c(19,22,25)){
+  for(j in c("Tetra","P.cau","TetraP.cau","Glauc","GlaucP.cau")){
+    a <- vfl_sum %>% filter(Temp==i,Trt==j) %>% ungroup%>% dplyr::select(Day,Freq) %>% as.matrix()
+    assign(paste0(j,"_",i), a)
+  }}
+
+require(emdist)
+
+# calculating EMD
+# here we evaluate the relative contribution of Tetrahymena and P.caudatum on prey evoltuion by calculating the similarity of prey evolutionary outcome (vfl1-1 frequency overtime) between 1) Tetrahynena-only treatment vs Tetrahymena+P.caudatum competition treatment 2) P.caudatum-only treatment vs Tetrahymena+P.caudatum competition treatment 3) Tetrahymena-only vs P.caudatum-only treatment across all temperature treatment.
+TP_emd <- data_frame(Temp=c("19","22","25"),T_comp = c(emd(Tetra_19,TetraP.cau_19),emd(Tetra_22,TetraP.cau_22),emd(Tetra_25,TetraP.cau_25)),P_comp=c(emd(P.cau_19,TetraP.cau_19),emd(P.cau_22,TetraP.cau_22),emd(P.cau_25,TetraP.cau_25)),T_P=c(emd(Tetra_19,P.cau_19),emd(Tetra_22,P.cau_22),emd(Tetra_25,P.cau_25))) %>% pivot_longer(T_comp:T_P,names_to = "pairs", values_to = "EMD") %>% mutate(pairs=factor(pairs,levels = c("P_comp","T_comp","T_P")))
+
+# Similarly, we evaluate the relative contribution of Glaucoma and P.caudatum on prey evoltuion
+GP_emd <- data_frame(Temp=c("19","22","25"),G_comp = c(emd(Glauc_19,GlaucP.cau_19),emd(Glauc_22,GlaucP.cau_22),emd(Glauc_25,GlaucP.cau_25)),P_comp=c(emd(P.cau_19,GlaucP.cau_19),emd(P.cau_22,GlaucP.cau_22),emd(P.cau_25,GlaucP.cau_25)),G_P=c(emd(Glauc_19,P.cau_19),emd(Glauc_22,P.cau_22),emd(Glauc_25,P.cau_25))) %>% pivot_longer(G_comp:G_P,names_to = "pairs", values_to = "EMD") %>% mutate(pairs=factor(pairs,levels = c("P_comp","G_comp","G_P")))
+
+TP_labels <- c("Paramecium:Tetra+Param","Tetrahymena:Tetra+Param","Tetrahymena:Paramecium")
+GP_labels <- c("Paramecium:Glauc+Param","Glaucoma:Glauc+Param","Glaucoma:Paramecium")
+
+
+TP_emd_fig <- ggplot(TP_emd, aes(x=Temp, y=EMD, group=pairs, color = pairs,linetype=pairs))+
+    scale_color_manual(name = "Comparison", labels = TP_labels,values=c("#9e9792","#add0af","#eaa064")) + 
+    scale_shape_manual(name = "Comparison",labels = TP_labels, values=c(0,1,2)) +
+    scale_linetype_manual(name = "Comparison",labels = TP_labels, values=c(1,2,3)) +
+  xlab("Temperature")+
+    ggtitle("Tetrahymena & Paramecium")+
+    geom_point(position=position_dodge(0.5),size =1.5,stroke =1.2,aes(shape=pairs))+
+    geom_line(position = position_dodge(0.5))+
+  fig.theme
+
+GP_emd_fig  <- ggplot(GP_emd, aes(x=Temp, y=EMD, group=pairs, color = pairs,linetype=pairs))+
+    scale_color_manual(name = "Comparison",labels=GP_labels,values=c("#9e9792","#add0af","#eaa064")) +
+    scale_shape_manual(name = "Comparison",labels= GP_labels,values=c(0,1,2)) +
+    scale_linetype_manual(name = "Comparison",labels = GP_labels, values=c(1,2,3)) +
+  xlab("Temperature")+
+    ggtitle("Glaucoma & Paramecium")+
+    geom_point(position=position_dodge(0.5),size =1.5,stroke =1.2,aes(shape=pairs))+
+    geom_line(position = position_dodge(0.5))+
+  fig.theme
+
+evo_emd <- ggarrange(TP_emd_fig, GP_emd_fig,labels = c("A", "B"),ncol = 1, nrow =2,common.legend = F)
+evo_emd
+```
+
+------------------------------------------------------------------------
+
+# Appendix IV — Statistical Analyses
+
+## Table 1 — ARMA Model Selection {#tbl1}
+
+::: annotation
+**Testing for autocorrelation (Methods: *Data analysis*)**
+:::
+
+```{r}
+#per-jar summary statistics (mean, median, SD, skewness, kurtosis) of log cell size
+cs_sum <- c0_trim_fscH %>% group_by(Day,Day_f,Block,Jar,Temp,Temp_f,Trt,Rep,Strain) %>% dplyr::summarise(mLgFSC_H = mean(lgFSC_H),medLgFSC_H = median(lgFSC_H),sdLgFSC_H = sd(lgFSC_H),skewLgFSC_H = skewness(lgFSC_H), kurtoLgFSC_H = kurtosis(lgFSC_H))
+
+vs_sng <- cs_sum %>% filter(Strain=="VFL1-1", Trt %in% c("Control","Tetra", "Glauc","P.cau"))
+ws_sng <- cs_sum %>% filter(Strain=="WT-mNG", Trt %in% c("Control","Tetra", "Glauc","P.cau"))
+
+# competition data frame
+vs_cmp <- cs_sum %>% filter(Strain=="VFL1-1", Trt %in% c("Tetra", "Glauc","TetraP.cau","GlaucP.cau")) %>% mutate(FocalSp=ifelse(Trt %in% c("Tetra","TetraP.cau"), "Tetra", "Glauc"), PredComp=ifelse(Trt %in% c("Tetra","Glauc"), "No","Yes"))
+ws_cmp <- cs_sum %>% filter(Strain=="WT-mNG", Trt %in% c("Tetra", "Glauc","TetraP.cau","GlaucP.cau")) %>% mutate(FocalSp=ifelse(Trt %in% c("Tetra","TetraP.cau"), "Tetra", "Glauc"), PredComp=ifelse(Trt %in% c("Tetra","Glauc"), "No","Yes"))
+
+vs_cmp %>% ungroup%>% dplyr::select(Trt,FocalSp,PredComp)
+```
+
+```{r}
+# WT log density (Ecological dynamics)
+lme.wd0 <- lme(lnDens ~ Temp*Trt*Day, data=wt_sng, random = ~ 1|Block) # Lowest. No autocorrelation
+lme.wd1 <- lme(lnDens ~ Temp*Trt*Day, data=wt_sng, random = ~ 1|Block,corr = corARMA(form = ~ Day|Block/Trt/Jar,p=1))
+lme.wd2 <- lme(lnDens ~ Temp*Trt*Day, data=wt_sng, random = ~ 1|Block,corr = corARMA(form = ~ Day|Block/Trt/Jar,p=2))
+lme.wd3 <- lme(lnDens ~ Temp*Trt*Day, data=wt_sng, random = ~ 1|Block,corr = corARMA(form = ~ Day|Block/Trt/Jar,p=3))
+AIC(lme.wd0,lme.wd1,lme.wd2,lme.wd3)
+
+# vfl1-1 log density (Ecological dynamics)
+lme.vd0 <- lme(lnDens ~ Temp*Trt*Day, data=vfl_sng, random = ~ 1|Block) # Lowest. No autocorrelation
+lme.vd1 <- lme(lnDens ~ Temp*Trt*Day, data=vfl_sng, random = ~ 1|Block,corr = corARMA(form = ~ Day|Block/Trt/Jar,p=1))
+lme.vd2 <- lme(lnDens ~ Temp*Trt*Day, data=vfl_sng, random = ~ 1|Block,corr = corARMA(form = ~ Day|Block/Trt/Jar,p=2))
+lme.vd3 <- lme(lnDens ~ Temp*Trt*Day, data=vfl_sng, random = ~ 1|Block,corr = corARMA(form = ~ Day|Block/Trt/Jar,p=3))
+AIC(lme.vd0,lme.vd1,lme.vd2,lme.vd3)
+
+# Freq (Evolutional dynamics)
+lme.vf0 <- lme(Freq ~ Temp*Trt*Day, data=vfl_sng, random = ~ 1|Block) # Lowest. No autocorrelation
+lme.vf1 <- lme(Freq ~ Temp*Trt*Day, data=vfl_sng, random = ~ 1|Block,corr = corARMA(form = ~ Day|Block/Trt/Jar,p=1))
+lme.vf2 <- lme(Freq ~ Temp*Trt*Day, data=vfl_sng, random = ~ 1|Block,corr = corARMA(form = ~ Day|Block/Trt/Jar,p=2))
+lme.vf3 <- lme(Freq ~ Temp*Trt*Day, data=vfl_sng, random = ~ 1|Block,corr = corARMA(form = ~ Day|Block/Trt/Jar,p=3))
+AIC(lme.vf0,lme.vf1,lme.vf2,lme.vf3)
+
+# Chlamydomonas wt size (Phenotypic dynamics)
+lme.wph0 <- lme(mLgFSC_H ~ Temp*Trt*Day, data= vs_sng, random = ~ 1|Block) # Lowest. No autocorrelation
+lme.wph1 <- lme(mLgFSC_H ~ Temp*Trt*Day, data= vs_sng, random = ~ 1|Block,corr = corARMA(form = ~ Day|Block/Trt/Jar,p=1))
+lme.wph2 <- lme(mLgFSC_H ~ Temp*Trt*Day, data= vs_sng, random = ~ 1|Block,corr = corARMA(form = ~ Day|Block/Trt/Jar,p=2))
+lme.wph3 <- lme(mLgFSC_H ~ Temp*Trt*Day, data= vs_sng, random = ~ 1|Block,corr = corARMA(form = ~ Day|Block/Trt/Jar,p=3))
+
+AIC(lme.wph0,lme.wph1,lme.wph2,lme.wph3)
+```
+
+## Table 2 — Temperature and Predator Identity Effects on *vfl1-1* Frequency
+
+::: annotation
+**Beta regression on *vfl1-1* frequency in single-predator treatments (Methods: *Data analysis*):** Because *vfl1-1* relative frequency is bounded \[0, 1\], a beta regression model is used via `glmmTMB` (v1.1.14) rather than a standard LMM. Block is included as a random effect; Temperature, Treatment, and Day are fixed effects with all interactions.
+:::
+
+```{r}
+# check value of 0 and 1 for beta regression
+sum(vfl_sng$Freq == 0)  
+sum(vfl_sng$Freq == 1)  # awesome. There are none
+
+# Fit beta regression
+library(glmmTMB)
+
+beta_vf <- glmmTMB(Freq ~ Temp * Trt * Day + (1|Block),
+                        family = beta_family(),
+                        data = vfl_sng)
+# Model that allows residual dispersion to vary across treatment
+beta_vf2 <- glmmTMB(Freq ~ Temp * Trt * Day + (1|Block),
+                          family = beta_family(),
+                          dispformula = ~Trt,  # model dispersion by treatment
+                          data = vfl_sng)
+AIC(beta_vf, beta_vf2) # second model with trt-level residual dispersion is much better. AIC -44.
+summary(beta_vf2)
+
+# check model residual
+library(DHARMa)
+sim_beta2 <- simulateResiduals(beta_vf2)
+plot(sim_beta2) # qq plot suggestion the residual distribution is good since none of the test resulted significant. Red line in the right panel suggestion there are noise rather than structural deviation in the residual in model 2. 
+```
+
+## Table 3 — Temperature and Predator Identity Effects on *vfl1-1* Cell Size
+
+::: annotation
+**LMM on *vfl1-1* mean cell size in single-predator treatments**
+:::
+
+```{r}
+lmm_vs_av <- lmer(mLgFSC_H ~ Temp*Trt*Day+(1|Block), data=vs_sng) 
+summary(lmm_vs_av);Anova(lmm_vs_av)
+```
+
+## Table 4 — Temperature and Predator Identity Effects on WT Cell Size
+
+::: annotation
+**LMM on WT mean cell size in single-predator treatments**
+:::
+
+```{r}
+lmm_ws_av <- lmer(mLgFSC_H ~ Temp*Trt*Day+(1|Block), data=ws_sng) 
+summary(lmm_ws_av);Anova(lmm_ws_av)
+```
+
+## Table 5 — Temperature and Competition Effects on *C. reinhardtii* Growth Rate and Max Density
+
+::: annotation
+**Stepwise model selection for prey demographic parameters (Methods: *Data analysis*)**
+:::
+
+```{r}
+require(MASS)
+c.full.r<-lm(r~Temp*Trt*Strain, data =c_r)
+c_r.step <- stepAIC(c.full.r, direction = "both", trace = FALSE)
+summary(c_r.step)
+
+c.full.max<-lm(lnDens~Temp*Trt*Strain, data =c_max)
+c_K.step <- stepAIC(c.full.max, direction = "both", trace = FALSE)
+summary(c_K.step)
+```
+
+## Table 6 — Temperature Effects on Δ*vfl1-1* Frequency (Single Predator)
+
+::: annotation
+**LMM on Δ*vfl1-1* frequency in single-predator treatments:** Unlike frequency of *vfl1-1*, Δ*vfl1-1* frequency is not bounded by 0 and 1. We used LMM instead of beta regression.
+:::
+
+```{r}
+vf_dltT.s <- lmer(dlt_Freq_T ~ Temp*Trt*Day+(1|Block), data=vdltf_sng) # everything significant!
+summary(vf_dltT.s);Anova(vf_dltT.s)
+plot(vf_dltT.s)  
+```
+
+## Table 7 — Temperature and Competition Effects on Predator Demographic Parameters
+
+::: annotation
+**Stepwise model selection for predator demographic parameters**
+:::
+
+```{r}
+# protists r and K linear model 
+full.r<-lm(r~Temp*Species*PredComp, data =pd_r)
+p_r.step <- stepAIC(full.r, direction = "both", trace = FALSE)
+summary(p_r.step )
+
+
+full.md<-lm(lnDens~Temp*Species*PredComp, data =pd_max)
+p_K.step <- stepAIC(full.md, direction = "both", trace = FALSE)
+summary(p_K.step)
+```
+
+## Table 8 — Temperature and Predator Effects on Full WT Size Distribution
+
+::: annotation
+**LMMs on distributional moments of WT cell size**
+:::
+
+```{r}
+# medium 
+lmm_w_med <- lmer(medLgFSC_H ~ Temp*Trt*Day+(1|Block), data=ws_sng); Anova(lmm_w_med)
+
+# sd
+lmm_w_sd <- lmer(sdLgFSC_H ~ Temp*Trt*Day+(1|Block), data=ws_sng); Anova(lmm_w_sd)
+
+# skewness
+lmm_w_sk <- lmer(skewLgFSC_H ~ Temp*Trt*Day+(1|Block), data=ws_sng); Anova(lmm_w_sk)
+
+# Kurtosis
+lmm_w_kt <- lmer(kurtoLgFSC_H ~ Temp*Trt*Day+(1|Block), data=ws_sng); Anova(lmm_w_kt)
+```
+
+## Table 9 — Temperature and Predator Competition Effects on *vfl1-1* Frequency
+
+::: annotation
+**Beta regression on *vfl1-1* frequency in competition treatments (Methods: *Data analysis*)**
+:::
+
+```{r}
+sum(vfl_cmp$Freq == 0)
+sum(vfl_cmp$Freq == 1)  # check for boundary values
+
+# Fit beta regression
+beta_vc <- glmmTMB(Freq ~ Temp * FocalSp * PredComp * Day + (1|Block),
+                        family = beta_family(),
+                        data = vfl_cmp)
+# allow dispersion vary by treatment
+beta_vc2 <- glmmTMB(Freq ~ Temp * FocalSp * PredComp * Day + (1|Block),
+                          family = beta_family(),
+                          dispformula = ~Trt,  # adjust dispersion predictor as needed
+                          data = vfl_cmp)
+AIC(beta_vc, beta_vc2) # model with no dispersion model is better
+summary(beta_vc)
+
+# check residual 
+sim_beta_vc <- simulateResiduals(beta_vc)
+plot(sim_beta_vc) # qq plot looks clean
+```
+
+## Table 10 — Temperature Effects on Δ*vfl1-1* Frequency (Competition Treatments)
+
+::: annotation
+**LMM on Δ*vfl1-1* frequency in competition treatments:** Mirrors Table 6 but applied to competition treatment data. The 19°C mean within each treatment × day is subtracted from 22°C and 25°C replicates to isolate temperature effects. The four-way interaction (Temperature × FocalSp × PredComp × Day) tests whether the predator community context modulates temperature-driven changes in prey evolution. This is a key result: significant effects of predator identity and predator competition on Δ frequency (Table 10 caption) support the conclusion that temperature effects on prey evolution are mediated through biotic interactions.
+:::
+
+```{r}
+v19_mean_cmp <- vfl_cmp %>% filter(Temp == 19 ) %>% group_by(Temp,Trt,Day) %>% summarize(m19Freq=mean(Freq)) %>% ungroup %>% dplyr::select(-Temp)
+vdltf_cmp <- vfl_cmp %>% filter( !Temp == 19 ) %>% left_join(.,v19_mean_cmp) %>% mutate(dlt_Freq_T=Freq-m19Freq)
+
+vf_dltT.c <- lmer(dlt_Freq_T  ~ Temp*FocalSp*PredComp*Day+(1|Block), data=vdltf_cmp) 
+summary(vf_dltT.c);Anova(vf_dltT.c)
+
+plot(vf_dltT.c)
+```
+
+## Table 11 — Temperature and Competition Effects on WT Cell Size
+
+::: annotation
+**LMM on WT cell size in competition treatments**
+:::
+
+```{r}
+lmm_wscmp_av <- lmer(mLgFSC_H ~ Temp*FocalSp*PredComp*Day+(1|Block), data=ws_cmp) 
+summary(lmm_wscmp_av);Anova(lmm_wscmp_av)
+```
+
+## Table 12 — Temperature and Competition Effects on *vfl1-1* Cell Size
+
+::: annotation
+**LMM on *vfl1-1* cell size in competition treatments**
+:::
+
+```{r}
+lmm_vscmp_av <- lmer(mLgFSC_H ~ Temp*FocalSp*PredComp*Day+(1|Block), data=vs_cmp) 
+summary(lmm_vscmp_av);Anova(lmm_vscmp_av)
+```
